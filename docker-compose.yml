@@ -1,0 +1,99 @@
+version: '3.8'
+services:
+  tpfinalhia:
+    container_name: tpfinalhia
+    image: lucasmartinez24/tpfinalhia-2:latest
+    restart: always
+    environment:
+      - PORT=3030
+    expose:
+      - 3030
+    ports:
+      - 3030:3030
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.13
+  management:
+    image: mysql/mysql-cluster:latest
+    container_name: management
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.2
+    command: ndb_mgmd --ndb-nodeid=1 --reload --initial
+    volumes:
+      - ./my.cnf:/etc/my.cnf
+      - ./mysql-cluster.cnf:/etc/mysql-cluster.cnf
+    hostname: management
+    restart: unless-stopped
+
+  ndb1-tpfinal:
+    image: mysql/mysql-cluster:latest
+    container_name: ndb1
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.3
+    command: ndbd --ndb-nodeid=2 --connect-string 174.17.0.2
+    volumes:
+      - ./mysql-cluster.cnf:/etc/mysql-cluster.cnf
+    restart: unless-stopped
+
+  ndb2-tpfinal:
+    image: mysql/mysql-cluster:latest
+    container_name: ndb2
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.4
+    command: ndbd --ndb-nodeid=3 --connect-string 174.17.0.2 
+    volumes:
+      - ./mysql-cluster.cnf:/etc/mysql-cluster.cnf
+    restart: unless-stopped
+
+  mysqldb:
+    image: mysql/mysql-cluster:latest
+    container_name: mysqldb
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.10
+    command: mysqld --ndb-nodeid=4 --ndb-connectstring 174.17.0.2
+    volumes:
+      - ./mysql-cluster.cnf:/etc/mysql-cluster.cnf
+    environment:
+      - MYSQL_USER=lucas
+      - MYSQL_PASSWORD=1234
+      - MYSQL_ROOT_PASSWORD=1234
+      - MYSQL_DATABASE=customersdb
+    ports:
+      - "50:3306"
+    restart: unless-stopped
+
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      - PMA_HOST=mysqldb
+      - PMA_USER=lucas
+      - PMA_PASSWORD=1234
+    ports:
+      - 8080:80
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.12
+
+  watchtower:
+    depends_on:
+      - tpfinalhia
+    container_name: watchtower
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_CLEANUP=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 tpfinalhia
+    networks:
+      cluster-test-tpfinal:
+        ipv4_address: 174.17.0.11
+
+networks:
+  cluster-test-tpfinal:
+    external: true
